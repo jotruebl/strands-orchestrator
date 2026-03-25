@@ -7,7 +7,6 @@ connection lifecycle via context manager.
 from __future__ import annotations
 
 import logging
-from contextlib import AsyncExitStack
 from typing import Any
 
 from mcp import stdio_client, StdioServerParameters
@@ -37,14 +36,12 @@ class MCPConnector:
 
     async def __aenter__(self) -> MCPConnector:
         """Open connections to all MCP servers."""
-        self._exit_stack = AsyncExitStack()
-        await self._exit_stack.__aenter__()
-
         for server_def in self._server_defs:
             try:
                 client = self._create_client(server_def)
+                # MCPClient uses sync context manager (__enter__/__exit__)
+                client.__enter__()
                 self._clients[server_def.name] = client
-                await self._exit_stack.enter_async_context(client)
                 tools = client.list_tools_sync()
                 self._tools_by_server[server_def.name] = tools
                 logger.info(
@@ -62,8 +59,11 @@ class MCPConnector:
 
     async def __aexit__(self, *exc: Any) -> None:
         """Close all MCP server connections."""
-        if self._exit_stack:
-            await self._exit_stack.__aexit__(*exc)
+        for name, client in self._clients.items():
+            try:
+                client.__exit__(None, None, None)
+            except Exception:
+                logger.exception("Error closing MCP client '%s'", name)
         self._clients.clear()
         self._tools_by_server.clear()
 
