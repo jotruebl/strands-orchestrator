@@ -19,7 +19,7 @@ Usage:
 """
 
 from strands_orchestrator.config import OrchestratorConfig
-from strands_orchestrator.container import AgentContainer
+from strands_orchestrator.container import AgentContainer, _state_get, _state_set, _state_clear
 from strands_orchestrator.factory import AgentFactory
 from strands_orchestrator.mcp_connector import MCPConnector
 from strands_orchestrator.mode_manager import ModeManager
@@ -36,6 +36,9 @@ __all__ = [
     "ModelFactory",
     "OrchestratorConfig",
     "StateAdapter",
+    "_state_get",
+    "_state_set",
+    "_state_clear",
 ]
 
 __version__ = "0.1.0"

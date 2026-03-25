@@ -2,6 +2,9 @@
 
 Handles converting between live Strands agent state and
 serializable Pydantic models for persistence.
+
+Note: Strands Agent.state is a JSONSerializableDict with limited API.
+Use agent.state.get() for full dict copy, agent.state.set(k, v) to set.
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ import logging
 
 from strands import Agent
 
-from strands_orchestrator.container import AgentContainer
+from strands_orchestrator.container import AgentContainer, _state_set
 from strands_orchestrator.types import AgentState
 
 logger = logging.getLogger(__name__)
@@ -33,9 +36,11 @@ class StateAdapter:
         states = {}
         for name, agent in container.agents.items():
             mode_manager = container.get_mode_manager(name)
+            # agent.state.get() with no args returns a full dict copy
+            state_dict = agent.state.get() or {}
             state = AgentState(
                 messages=list(agent.messages),
-                state=dict(agent.state),
+                state=state_dict,
                 current_mode=mode_manager.current_mode if mode_manager else None,
             )
             states[name] = state.model_dump(mode="json")
@@ -74,9 +79,10 @@ class StateAdapter:
             if state.messages:
                 agent.messages.extend(state.messages)
 
-            # Restore custom state
+            # Restore custom state via JSONSerializableDict API
             if state.state:
-                agent.state.update(state.state)
+                for key, value in state.state.items():
+                    _state_set(agent, key, value)
 
             # Restore mode
             mode_manager = container.get_mode_manager(agent_name)
