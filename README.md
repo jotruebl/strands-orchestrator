@@ -262,6 +262,24 @@ from strands_orchestrator.protocols import (
 
 All protocols are `@runtime_checkable` -- the framework validates at startup that your implementations satisfy the interface.
 
+## MCP Prompts
+
+`MCPConnector` provides access to MCP server prompts in addition to tools. Use `get_prompt()` to fetch templated prompts from any connected server:
+
+```python
+# Via MCPConnector directly
+connector = pool_service.mcp_connector
+result = connector.get_prompt(
+    server_name="fusion",
+    prompt_name="home_context",
+    arguments={"context_string": "..."},
+)
+# result is mcp.types.GetPromptResult
+prompt_text = result.messages[0].content.text
+```
+
+This calls `MCPClient.get_prompt_sync()` under the hood, so it's synchronous. Wrap in `asyncio.to_thread()` when calling from async code.
+
 ## Mode-Aware Tool Filtering
 
 Agents can have multiple modes that control which tools are visible. The LLM gets a `switch_mode` tool and can change modes autonomously:

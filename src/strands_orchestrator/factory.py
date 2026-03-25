@@ -89,7 +89,7 @@ class AgentFactory:
     ) -> tuple[Agent, ModeManager | None]:
         """Build a single agent from its definition."""
         # Create model
-        model = self._model_factory.create(agent_def.model)
+        model = self._model_factory.create(agent_def.model, max_tokens=agent_def.max_tokens)
 
         # Set up mode filtering
         mode_manager = None

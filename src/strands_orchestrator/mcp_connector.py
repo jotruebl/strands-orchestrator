@@ -13,6 +13,8 @@ from mcp import stdio_client, StdioServerParameters
 from mcp.client.sse import sse_client
 from strands.tools.mcp import MCPClient
 
+from mcp.types import GetPromptResult
+
 from strands_orchestrator.types import MCPServerDefinition
 
 logger = logging.getLogger(__name__)
@@ -118,6 +120,24 @@ class MCPConnector:
     def get_server_names(self) -> list[str]:
         """Get names of all connected servers."""
         return list(self._clients.keys())
+
+    def get_prompt(
+        self, server_name: str, prompt_name: str, arguments: dict
+    ) -> GetPromptResult:
+        """Fetch a prompt from a specific MCP server.
+
+        Args:
+            server_name: Name of the MCP server (e.g., "fusion").
+            prompt_name: Name of the prompt to fetch.
+            arguments: Arguments to pass to the prompt template.
+
+        Returns:
+            GetPromptResult from the MCP server.
+        """
+        client = self._clients.get(server_name)
+        if not client:
+            raise ValueError(f"MCP server '{server_name}' not connected")
+        return client.get_prompt_sync(prompt_name, arguments)
 
     @property
     def is_connected(self) -> bool:

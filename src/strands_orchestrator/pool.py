@@ -44,6 +44,11 @@ class AgentPoolService:
         self._is_initialized = False
         self._is_shutting_down = False
 
+    @property
+    def mcp_connector(self) -> MCPConnector | None:
+        """Access the underlying MCP connector for prompt/resource calls."""
+        return self._mcp_connector
+
     @classmethod
     async def create(cls, config: OrchestratorConfig) -> AgentPoolService:
         """Create and initialize an AgentPoolService.
