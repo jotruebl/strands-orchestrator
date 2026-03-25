@@ -53,6 +53,13 @@ class ModelFactory:
         Returns:
             A Strands model instance (AnthropicModel, OpenAIModel, etc.)
         """
+        # Strip Bedrock-style provider prefix (e.g., "anthropic.claude-..." → "claude-...")
+        if "." in model_string and not model_string.startswith(("gpt-", "o1-", "o3-", "o4-")):
+            prefix, _, bare_id = model_string.partition(".")
+            if bare_id:
+                logger.debug("Stripped provider prefix '%s.' from model ID", prefix)
+                model_string = bare_id
+
         if model_string in self._aliases:
             provider, model_id = self._aliases[model_string]
         else:

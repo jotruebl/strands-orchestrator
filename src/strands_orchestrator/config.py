@@ -1,9 +1,10 @@
-"""OrchestratorConfig — the DI container for strands-orchestrator.
+"""OrchestratorConfig — declarative configuration for strands-orchestrator.
 
-All fields are optional. The orchestrator enables features based on
-which protocol implementations are provided. For example, providing
-an event_bus + event_factory enables the EventBridgeHook; providing
-a background_inbox enables the InboxHook.
+Declares what services are available. The config is stored on each
+AgentContainer at pool creation time. When prepare_for_request() is
+called per-request, the container reads the config and registers
+hooks automatically. Callers only provide request-scoped context
+(chat_id, user, interrupt_event).
 """
 
 from __future__ import annotations

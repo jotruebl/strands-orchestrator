@@ -195,7 +195,20 @@ class StreamEventFactoryProtocol(Protocol):
         """Create an event for when an agent turn begins."""
         ...
 
-    def create_turn_end_event(self, chat_id: str, agent_name: str) -> Any:
+    def create_reasoning_step_event(
+        self,
+        chat_id: str,
+        agent_name: str,
+        iteration: int,
+        content: list,
+        stop_reason: str,
+    ) -> Any:
+        """Create an event for a model response within the agent loop."""
+        ...
+
+    def create_turn_end_event(
+        self, chat_id: str, agent_name: str, response_content: list | None = None
+    ) -> Any:
         """Create an event for when an agent turn ends."""
         ...
 

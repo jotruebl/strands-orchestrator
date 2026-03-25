@@ -14,13 +14,24 @@ are NOT supported.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from strands import Agent
+from strands.handlers.callback_handler import null_callback_handler
 
+from strands_orchestrator.hooks import (
+    AuthTokenInjectorHook,
+    ConsentHook,
+    EventBridgeHook,
+    InterruptHook,
+)
 from strands_orchestrator.mode_manager import ModeManager
 from strands_orchestrator.protocols import UserContextProtocol
+
+if TYPE_CHECKING:
+    from strands_orchestrator.config import OrchestratorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +78,11 @@ class AgentContainer:
         self,
         agents: dict[str, Agent],
         mode_managers: dict[str, ModeManager] | None = None,
+        config: OrchestratorConfig | None = None,
     ):
         self._agents = agents
         self._mode_managers = mode_managers or {}
+        self._config = config
 
     def __getitem__(self, name: str) -> Agent:
         try:
@@ -126,6 +139,73 @@ class AgentContainer:
         """Set a value on all agents' state."""
         for agent in self._agents.values():
             _state_set(agent, key, value)
+
+    def prepare_for_request(
+        self,
+        agent_name: str,
+        *,
+        chat_id: str,
+        user: object | None = None,
+        interrupt_event: asyncio.Event | None = None,
+        main_loop: asyncio.AbstractEventLoop | None = None,
+    ) -> Agent:
+        """Prepare a named agent for a single request.
+
+        Registers hooks based on the container's OrchestratorConfig:
+        - EventBridgeHook for SSE events (if event_bus + event_factory in config)
+        - AuthTokenInjectorHook for MCP tool auth (always)
+        - ConsentHook for tool consent gating (if enable_consent in config)
+        - InterruptHook for user cancellation (if interrupt_event provided)
+
+        Suppresses the default PrintingCallbackHandler.
+
+        Args:
+            agent_name: Name of the agent to prepare (e.g., "mode-based").
+            chat_id: Conversation ID for SSE event routing.
+            user: User context for role-based event filtering.
+            interrupt_event: asyncio.Event checked before each tool call.
+            main_loop: The main asyncio event loop (e.g., FastAPI's). Required
+                for cross-thread event publishing since Strands runs agent()
+                in a ThreadPoolExecutor.
+
+        Returns:
+            The configured Agent, ready to be called with a prompt.
+        """
+        agent = self[agent_name]
+        config = self._config
+
+        # SSE event publishing (TURN_START/END, TOOL_CALL_START/END, REASONING_STEP)
+        if config and config.event_bus and config.event_factory:
+            hook = EventBridgeHook(
+                event_bus=config.event_bus,
+                event_factory=config.event_factory,
+                chat_id=chat_id,
+                agent_name=agent_name,
+                user=user,
+            )
+            if main_loop:
+                hook.set_main_loop(main_loop)
+            hook.register_hooks(agent.hooks)
+
+        # Auth token injection into tool call arguments
+        AuthTokenInjectorHook(agent=agent).register_hooks(agent.hooks)
+
+        # Tool consent gating
+        if config and config.enable_consent and config.consent_service:
+            ConsentHook(
+                consent_service=config.consent_service,
+                auto_approve_tools=config.auto_approve_tools,
+                session_id=chat_id,
+            ).register_hooks(agent.hooks)
+
+        # Interrupt checking before each tool call
+        if interrupt_event:
+            InterruptHook(interrupt_event=interrupt_event).register_hooks(agent.hooks)
+
+        # Suppress default PrintingCallbackHandler
+        agent.callback_handler = null_callback_handler
+
+        return agent
 
     async def reset_state(self) -> None:
         """Clear conversation history and state for all agents.

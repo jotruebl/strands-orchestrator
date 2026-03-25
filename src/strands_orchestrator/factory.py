@@ -18,6 +18,7 @@ from strands_orchestrator.model_factory import ModelFactory
 from strands_orchestrator.types import AgentDefinition, MCPServerDefinition, ModeDefinition
 
 if TYPE_CHECKING:
+    from strands_orchestrator.config import OrchestratorConfig
     from strands_orchestrator.protocols import AgentConfigSourceProtocol
 
 logger = logging.getLogger(__name__)
@@ -40,11 +41,13 @@ class AgentFactory:
         model_factory: ModelFactory,
         mcp_connector: MCPConnector | None = None,
         enable_mode_filtering: bool = True,
+        config: OrchestratorConfig | None = None,
     ):
         self._config_source = config_source
         self._model_factory = model_factory
         self._mcp_connector = mcp_connector
         self._enable_mode_filtering = enable_mode_filtering
+        self._config = config
 
     async def build(self) -> AgentContainer:
         """Build an AgentContainer from the configured sources.
@@ -78,7 +81,7 @@ class AgentFactory:
             if mode_manager:
                 mode_managers[agent_def.name] = mode_manager
 
-        container = AgentContainer(agents=agents, mode_managers=mode_managers)
+        container = AgentContainer(agents=agents, mode_managers=mode_managers, config=self._config)
         logger.info("AgentContainer built with %d agents", len(agents))
         return container
 

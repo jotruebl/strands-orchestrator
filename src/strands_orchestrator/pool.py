@@ -2,23 +2,19 @@
 
 Pre-warms agent instances with MCP connections at startup.
 Acquire/release pattern with automatic state reset between requests.
-Auto-registers hooks based on OrchestratorConfig.
+Hooks are registered per-request via AgentContainer.prepare_for_request().
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from strands_orchestrator.config import OrchestratorConfig
 from strands_orchestrator.container import AgentContainer
 from strands_orchestrator.factory import AgentFactory
-from strands_orchestrator.hooks import ConsentHook, EventBridgeHook, InboxHook, InterruptHook
 from strands_orchestrator.mcp_connector import MCPConnector
 from strands_orchestrator.model_factory import ModelFactory
-from strands_orchestrator.state import StateAdapter
 from strands_orchestrator.types import MCPServerDefinition
 
 logger = logging.getLogger(__name__)
@@ -86,6 +82,7 @@ class AgentPoolService:
             model_factory=model_factory,
             mcp_connector=self._mcp_connector,
             enable_mode_filtering=self._config.enable_mode_filtering,
+            config=self._config,
         )
 
         # 4. Warm the pool
@@ -182,88 +179,6 @@ class AgentPoolService:
 
         await container.reset_state()
         await self._pool.put(container)
-
-    @asynccontextmanager
-    async def get_container(
-        self,
-        chat_id: str = "",
-        agent_name: str = "",
-        user: object | None = None,
-        session_id: str = "",
-        conversation_id: str = "",
-        interrupt_event: asyncio.Event | None = None,
-    ) -> AsyncGenerator[AgentContainer, None]:
-        """Context manager for acquiring a container with hooks auto-wired.
-
-        Registers appropriate hooks based on OrchestratorConfig,
-        then releases and resets the container on exit.
-        """
-        container = await self.acquire()
-
-        # Register hooks based on config
-        self._register_hooks(
-            container,
-            chat_id=chat_id,
-            agent_name=agent_name,
-            user=user,
-            session_id=session_id,
-            conversation_id=conversation_id,
-            interrupt_event=interrupt_event,
-        )
-
-        try:
-            yield container
-        finally:
-            await self.release(container)
-
-    def _register_hooks(
-        self,
-        container: AgentContainer,
-        chat_id: str = "",
-        agent_name: str = "",
-        user: object | None = None,
-        session_id: str = "",
-        conversation_id: str = "",
-        interrupt_event: asyncio.Event | None = None,
-    ) -> None:
-        """Register hooks on all agents based on config."""
-        for agent in container.agents.values():
-            # Event bridge
-            if self._config.event_bus and self._config.event_factory:
-                hook = EventBridgeHook(
-                    event_bus=self._config.event_bus,
-                    event_factory=self._config.event_factory,
-                    chat_id=chat_id,
-                    agent_name=agent_name,
-                    user=user,
-                )
-                hook.register_hooks(agent.hooks)
-
-            # Consent
-            if self._config.enable_consent and self._config.consent_service:
-                hook = ConsentHook(
-                    consent_service=self._config.consent_service,
-                    auto_approve_tools=self._config.auto_approve_tools,
-                    session_id=session_id,
-                )
-                hook.register_hooks(agent.hooks)
-
-            # Background inbox
-            if self._config.enable_background_tasks and self._config.background_inbox:
-                user_tenant_id = None
-                if user and hasattr(user, "tenant_id"):
-                    user_tenant_id = user.tenant_id
-                hook = InboxHook(
-                    inbox_service=self._config.background_inbox,
-                    conversation_id=conversation_id,
-                    user_tenant_id=user_tenant_id,
-                )
-                hook.register_hooks(agent.hooks)
-
-            # Interrupt
-            if self._config.enable_interrupts:
-                hook = InterruptHook(interrupt_event=interrupt_event)
-                hook.register_hooks(agent.hooks)
 
     async def shutdown(self) -> None:
         """Shut down the pool and close MCP connections."""
