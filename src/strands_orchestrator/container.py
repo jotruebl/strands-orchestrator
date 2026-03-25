@@ -104,7 +104,9 @@ class AgentContainer:
         """
         for name, agent in self._agents.items():
             agent.messages.clear()
-            agent.state.clear()
+            # agent.state may be a JSONSerializableDict that lacks .clear()
+            for key in list(agent.state.keys()):
+                del agent.state[key]
             logger.debug("Reset state for agent '%s'", name)
 
         # Reset mode managers to default mode
