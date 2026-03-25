@@ -33,9 +33,10 @@ class InterruptHook(HookProvider):
     def _check_interrupt(self, event: BeforeToolCallEvent) -> None:
         """Raise CancelledError if interrupt has been requested."""
         if self.interrupt_event.is_set():
+            tool_name: str = event.tool_use["name"]
             logger.info(
                 "Interrupt detected before tool call '%s'. Cancelling.",
-                event.tool_name,
+                tool_name,
             )
             raise asyncio.CancelledError("User requested interruption")
 

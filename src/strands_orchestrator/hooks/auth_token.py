@@ -39,8 +39,9 @@ class AuthTokenInjectorHook(HookProvider):
         if not token:
             return
 
-        tool_input = event.tool_use.get("input")
+        tool_input = event.tool_use["input"]
         if isinstance(tool_input, dict):
             tool_input["mcp_custom_auth_token"] = token
-        elif tool_input is None:
+        else:
+            # input is not a dict (e.g., None or string) — replace with dict
             event.tool_use["input"] = {"mcp_custom_auth_token": token}

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from strands.hooks import HookProvider, HookRegistry
 from strands.hooks.events import BeforeToolCallEvent
+from strands.types.tools import ToolUse
 
 if TYPE_CHECKING:
     from strands_orchestrator.protocols import ConsentServiceProtocol
@@ -46,25 +47,19 @@ class ConsentHook(HookProvider):
 
     def _check_consent(self, event: BeforeToolCallEvent) -> None:
         """Check if tool execution is consented."""
-        tool_name = event.tool_name
+        tool_use: ToolUse = event.tool_use
+        tool_name: str = tool_use["name"]
 
-        # Auto-approved tools skip consent
         if tool_name in self.auto_approve_tools:
             return
 
         if not self.session_id:
             return
 
-        # Run async consent check synchronously in the hook
         try:
-            loop = asyncio.get_running_loop()
-            future = asyncio.ensure_future(
-                self._async_consent_check(tool_name, event)
+            asyncio.ensure_future(
+                self._async_consent_check(tool_name, tool_use)
             )
-            # Note: Strands hooks are synchronous. If consent checking
-            # needs to be async, this may need to be adapted based on
-            # how Strands handles hook blocking.
-            # For now, log the consent check intent.
             logger.info(
                 "Consent check initiated for tool '%s' in session '%s'",
                 tool_name,
@@ -74,18 +69,16 @@ class ConsentHook(HookProvider):
             logger.warning("No running event loop for consent check")
 
     async def _async_consent_check(
-        self, tool_name: str, event: BeforeToolCallEvent
+        self, tool_name: str, tool_use: ToolUse
     ) -> bool:
         """Async consent check implementation."""
-        # First check if already consented
         is_approved = await self.consent_service.check_consent(
             tool_name, self.session_id
         )
         if is_approved:
             return True
 
-        # Request consent
-        tool_input = event.tool_input if hasattr(event, "tool_input") else {}
+        tool_input: dict = tool_use["input"] if isinstance(tool_use["input"], dict) else {}
         approved = await self.consent_service.request_consent(
             tool_name, tool_input, self.session_id
         )

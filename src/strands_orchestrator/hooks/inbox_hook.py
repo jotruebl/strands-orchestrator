@@ -106,8 +106,8 @@ class InboxHook(HookProvider):
 
     async def _async_auto_register(self, event: AfterToolCallEvent) -> None:
         """Async auto-registration of containers and LLM tasks."""
-        tool_name = event.tool_name
-        tool_result = event.tool_result if hasattr(event, "tool_result") else None
+        tool_name: str = event.tool_use["name"]
+        tool_result = event.result
 
         if tool_result is None:
             return
