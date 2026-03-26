@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Tools that never require consent
-DEFAULT_AUTO_APPROVE: set[str] = {"switch_mode"}
+DEFAULT_AUTO_APPROVE: set[str] = {"switch_mode", "sequentialthinking"}
 
 
 class ConsentHook(HookProvider):

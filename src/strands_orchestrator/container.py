@@ -208,13 +208,19 @@ class AgentContainer:
         return agent
 
     async def reset_state(self) -> None:
-        """Clear conversation history and state for all agents.
+        """Clear conversation history, state, and hooks for all agents.
 
         Called between requests to prevent state leakage from the agent pool.
+        Hooks are cleared here because prepare_for_request() re-registers them
+        each time; without clearing, callbacks accumulate and fire N times
+        after N reuses.
         """
         for name, agent in self._agents.items():
             agent.messages.clear()
             _state_clear(agent)
+            # Clear hook callbacks to prevent accumulation across pool reuses.
+            # prepare_for_request() will re-register the necessary hooks.
+            agent.hooks._registered_callbacks.clear()
             logger.debug("Reset state for agent '%s'", name)
 
         # Reset mode managers to default mode

@@ -43,6 +43,11 @@ def _extract_text_blocks(message: Message) -> list[dict[str, str]]:
     return result
 
 
+
+# Tool names that should be treated as thinking events, not tool calls
+THINKING_TOOLS: set[str] = {"sequentialthinking"}
+
+
 class EventBridgeHook(HookProvider):
     """Publishes agent execution events to an external EventBus.
 
@@ -113,10 +118,29 @@ class EventBridgeHook(HookProvider):
     def _on_tool_start(self, event: BeforeToolCallEvent) -> None:
         if not self.chat_id:
             return
+
+        tool_name = event.tool_use["name"]
+
+        # Sequential thinking tools are emitted as reasoning steps, not tool calls
+        if tool_name in THINKING_TOOLS:
+            tool_input = event.tool_use.get("input", {})
+            thought = tool_input.get("thought", "") if isinstance(tool_input, dict) else str(tool_input)
+            self._iteration += 1
+            self._publish_async(
+                self.event_factory.create_reasoning_step_event(
+                    chat_id=self.chat_id,
+                    agent_name=self.agent_name,
+                    iteration=self._iteration,
+                    content=[{"type": "text", "text": thought}],
+                    stop_reason="tool_use",
+                )
+            )
+            return
+
         self._publish_async(
             self.event_factory.create_tool_start_event(
                 chat_id=self.chat_id,
-                tool_name=event.tool_use["name"],
+                tool_name=tool_name,
                 tool_input=event.tool_use["input"],
             )
         )
@@ -124,6 +148,11 @@ class EventBridgeHook(HookProvider):
     def _on_tool_end(self, event: AfterToolCallEvent) -> None:
         if not self.chat_id:
             return
+
+        # Suppress TOOL_CALL_END for thinking tools — already handled as reasoning step
+        if event.tool_use["name"] in THINKING_TOOLS:
+            return
+
         self._publish_async(
             self.event_factory.create_tool_end_event(
                 chat_id=self.chat_id,
